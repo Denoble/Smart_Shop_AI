@@ -1,0 +1,6 @@
+text# .gitignore
+
+# Ignore actual local configuration files containing secrets
+
+# Ignore actual local configuration files containing secrets
+database/docker-compose.yml

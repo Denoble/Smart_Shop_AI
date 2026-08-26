@@ -1,4 +1,4 @@
-id,name,brand,category,price,description,stock,rating
+product_id,name,brand,category,price,description,stock,rating
 SP0001,Maxi Phone v95346,TechCo,smartphone,774.39,Smartphone with advanced camera system.,157,4.2
 SP0002,Mobile Z v19666,TechCo,smartphone,700.92,Smartphone with 5G connectivity.,66,4.5
 LP0003,Business Mate v70131,UltraComp,laptop,460.92,13.3 inch laptop featuring long battery life.,132,4.2

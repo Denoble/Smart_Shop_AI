@@ -23,10 +23,8 @@ def product_to_text(product) -> str:
     Product: {product.name}
     Brand: {product.brand}
     Category: {product.category}
-
     Description:
     {product.description}
-
     Price:
     {product.price}
 
@@ -34,26 +32,26 @@ def product_to_text(product) -> str:
     
 def review_to_text(review) -> str:
     return f"""
-    Product: {review.product_name}
-
+    Product: {review.product_id}
     Rating:
     {review.rating}/5
-
-    Review:
-    {review.review_text}
-
-    Sentiment:
-    {review.sentiment}
+     Sentiment:
+        {review.text}
+    Date:
+    {review.date}
     """
 def policy_to_text(policy) -> str:
+
     return f"""
-    Store: {policy.store_name}
-
-    Policy Category:
-    {policy.category}
-
-    Type:
-    {policy.policy_type}
-    Policy:
-    {policy.content}
+     Policy_Type:
+        {policy.policy_type}
+        
+    Description:
+        {policy.description}
+        
+    Condition:
+    {policy.conditions}
+    
+    Timeframe:
+    {policy.timeframe}
     """

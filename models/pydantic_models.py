@@ -21,17 +21,16 @@ class Product(BaseModel):
     
 class Review(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    product_id: int
+    product_id: str
     rating: float
     text: str
     date: str
 class Policy(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    store_id: int
     policy_type: str
     description: str
     conditions: str
-    timeframe: str
+    timeframe: int
     
 class Pricing(BaseModel):
     model_config = ConfigDict(from_attributes=True)

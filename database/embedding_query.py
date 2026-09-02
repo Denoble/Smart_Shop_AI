@@ -1,15 +1,28 @@
-import psycopg2 
+
 import pandas as pd
 import numpy as np
 import math
 import sys
 from pathlib import Path
-from pgvector.psycopg2 import register_vector
+import psycopg
+from pgvector.psycopg import register_vector
 
 
 dir_path = Path("./models")
 sys.path.append(str(dir_path))
 from pydantic_models import *
+
+# Establish a connection to the PostgreSQL database
+conn = psycopg.connect(
+            dbname="smartshop",
+            user="smartshop",
+            password="smartshop",
+            host="localhost",
+            port=5432
+        )
+
+register_vector(conn)
+cursor = conn.cursor()
 
 def read_product_file(file_path = "csvs/products.csv") ->list[Product]:
     pd_products = pd.read_csv(file_path)
@@ -53,7 +66,77 @@ def read_policy_file(file_path = "csvs/policies.csv") ->list[dict]:
         )
         policies.append(policy)
     return policies
+
+def insert_product(product: Product):
+    
+    conn = get_db_connection()
+
+    register_vector(conn)
+    cursor = conn.cursor()
+    query = """
+    INSERT INTO products
+(product_id, name, description, brand, category, subcategory,
+ price, currency, rating, stock)
+VALUES
+(
+    %s,
+    %s,
+    %s,
+   %s,
+    %s,
+    %s,
+    %s,
+    %s,
+    %s,
+    %s
+)
+ ON CONFLICT (product_id) 
+                DO UPDATE SET 
+
+name = EXCLUDED.name,
+description = EXCLUDED.description,
+brand = EXCLUDED.brand,
+category = EXCLUDED.category,
+subcategory = EXCLUDED.subcategory,
+image_url = EXCLUDED.image_url,
+price = EXCLUDED.price,
+currency =EXCLUDED.currency,
+rating = EXCLUDED.rating,
+stock = EXCLUDED.stock,
+created_at =EXCLUDED.created_at,
+updated_at = CURRENT_TIMESTAMP
+    """
+    try:
+        # Execute the INSERT statement
+        cursor.execute(query, (product.id,
+                            product.name, product.description,
+                            product.brand,"","",product.price,
+                            Currency.USD,product.rating,
+                            product.stock))
+        
+        conn.commit()
+        print("Record inserted successfully!")
+    except Exception as e:
+        print(f"Error inserting product: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_db_connection():
+    conn = psycopg.connect(
+            dbname="smartshop",
+            user="smartshop",
+            password="smartshop",
+            host="localhost",
+            port=5432
+        )
+    return conn
+    
 def insert_product_embedding(product_id, content, embedding):
+    conn = get_db_connection()
+    register_vector(conn)
+    cursor = conn.cursor()
     """
     Inserts a product embedding into the database.
 
@@ -65,17 +148,6 @@ def insert_product_embedding(product_id, content, embedding):
     # Convert the embedding list to a string representation
     embedding_str = ','.join(map(str, embedding))
 
-    # Establish a connection to the PostgreSQL database
-    conn = psycopg2.connect(
-        dbname="smartshop",
-        user="smartshop",
-        password="smartshop",
-        host="localhost",
-        port=5432
-    )
-    content = content.strip()
-    register_vector(conn)
-    cursor = conn.cursor()
     insert_query = """
                 INSERT INTO product_embeddings (product_id, content, embedding)
                 VALUES (%s, %s, %s)
@@ -101,13 +173,8 @@ def insert_product_embedding(product_id, content, embedding):
         conn.close()
         
 def insert_policy_embedding(policy_type, content, embedding):
-    conn = psycopg2.connect(
-            dbname="smartshop",
-            user="smartshop",
-            password="smartshop",
-            host="localhost",
-            port=5432
-        )
+    
+    conn = get_db_connection()
     content = content.strip()
     register_vector(conn)
     cursor = conn.cursor()
@@ -134,45 +201,106 @@ def insert_policy_embedding(policy_type, content, embedding):
         # Close the cursor and connection
         cursor.close()
         conn.close()
-    
-    
-def  insert_review_embedding(product_id, input_text, embedding):
-    """
-        Inserts a product embedding into the database.
-        Args:
-            product_id (int): The ID of the product.
-            content (str): The textual content associated with the product.
-            embedding (list[float]): The embedding vector for the product.
-    """
-    # Establish a connection to the PostgreSQL database
-    conn = psycopg2.connect(
-        dbname="smartshop",
-        user="smartshop",
-        password="smartshop",
-        host="localhost",
-        port=5432
-    )
-    content = input_text.strip()
+        
+        
+        
+def insert_policy(policy: Policy):
+    conn = get_db_connection()
     register_vector(conn)
     cursor = conn.cursor()
+    
     insert_query = """
-                    INSERT INTO review_embeddings (product_id, content, embedding)
-                    VALUES (%s, %s, %s)
+                INSERT INTO policies (type,
+                description,conditions,timeframe)
+                VALUES (%s, %s, %s,%s)
+                ON CONFLICT (id) 
+                DO UPDATE SET 
+                    type = EXCLUDED.type,
+                    description = EXCLUDED.description,
+                    conditions = EXCLUDED.conditions,
+                    timeframe = EXCLUDED.timeframe,
+                    updated_at = CURRENT_TIMESTAMP;
+            """
+    try:
+        # Execute the INSERT statement
+        cursor.execute(insert_query, (policy.policy_type, policy.description, policy.conditions,
+                                    policy.timeframe))
+        
+        # Commit the transaction
+        conn.commit()
+        print(f"Record product of product policy of type {policy.policy_type} inserted successfully!")
+    except Exception as e:
+        print(f"Error inserting policy: {e}")
+        conn.rollback()
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
+    
+
+def  insert_review_embedding(product_id, input_text, embedding):
+     # Establish a connection to the PostgreSQL database
+    
+        conn = get_db_connection()
+        content = input_text.strip()
+        register_vector(conn)
+        cursor = conn.cursor()
+        insert_query = """
+                        INSERT INTO review_embeddings (product_id, content, embedding)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (product_id) 
+                        DO UPDATE SET 
+                            content = EXCLUDED.content,
+                            embedding = EXCLUDED.embedding,
+                            created_at = CURRENT_TIMESTAMP;
+                    """
+        try:
+            # Execute the INSERT statement
+            cursor.execute(insert_query, (product_id, content, embedding))
+    
+            # Commit the transaction
+            conn.commit()
+            print("Record inserted successfully!")
+        except Exception as e:
+            print(f"Error inserting review embedding: {e}")
+            conn.rollback()
+        finally:
+            # Close the cursor and connection
+            cursor.close()
+            conn.close()
+        
+    
+    
+def  insert_review(review:Review):
+
+    conn = get_db_connection()
+    register_vector(conn)
+    cursor = conn.cursor()
+
+    # Establish a connection to the PostgreSQL database
+    insert_query = """
+                    INSERT INTO reviews (product_id, rating, text,date,verified_purchase,
+                    sentiment,sentiment_score)
+                    VALUES (%s, %s, %s,%s,%s,%s,%s)
                     ON CONFLICT (product_id) 
                     DO UPDATE SET 
-                        content = EXCLUDED.content,
-                        embedding = EXCLUDED.embedding,
-                        created_at = CURRENT_TIMESTAMP;
+                        rating = EXCLUDED.rating,
+                        text = EXCLUDED.text,
+                        date = EXCLUDED.date,
+                        verified_purchase = EXCLUDED.verified_purchase,
+                        sentiment =EXCLUDED.sentiment,
+                        sentiment_score =EXCLUDED.sentiment_score
                 """
     try:
         # Execute the INSERT statement
-        cursor.execute(insert_query, (product_id, content, embedding))
+        cursor.execute(insert_query, (review.product_id, review.rating,
+                                    review.text,review.date,True,"",0))
 
         # Commit the transaction
         conn.commit()
         print("Record inserted successfully!")
     except Exception as e:
-        print(f"Error inserting review embedding: {e}")
+        print(f"Error inserting review : {e}")
         conn.rollback()
     finally:
         # Close the cursor and connection

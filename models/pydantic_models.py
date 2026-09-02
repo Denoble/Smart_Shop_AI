@@ -1,7 +1,8 @@
 from pydantic import BaseModel
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
-
+from dataclasses import dataclass, field
+from typing import Optional
 
 class Currency(str, Enum):
     USD = "USD"
@@ -53,4 +54,87 @@ class Pricing(BaseModel):
             2
         )
 
-    
+@dataclass
+class ProductFilters:
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    min_rating: Optional[float] = None
+
+    attributes: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class SearchRequest:
+    query: str
+    filters: ProductFilters = field(
+        default_factory=ProductFilters
+    )
+
+    limit: int = 10
+
+
+
+
+
+class SearchIntent(BaseModel):
+    """
+    Structured representation of the user's shopping request.
+    """
+
+    semantic_query: str = Field(
+        description=(
+            "The semantic portion of the request that should "
+            "be used for vector search."
+        )
+    )
+
+    brands: list[str] = Field(
+        default_factory=list
+    )
+
+    category: Optional[str] = None
+
+    subcategory: Optional[str] = None
+
+    min_price: Optional[float] = None
+
+    max_price: Optional[float] = None
+
+    min_rating: Optional[float] = None
+
+    required_attributes: dict[str, str] = Field(
+        default_factory=dict
+    )
+
+    preferred_attributes: dict[str, str] = Field(
+        default_factory=dict
+    )
+
+    preferred_brands: list[str] = Field(
+        default_factory=list
+    )
+class ProductResult(BaseModel):
+    product_id: int
+
+    name: str
+
+    brand: str
+
+    category: str
+
+    price: float
+
+    rating: float
+
+    semantic_score: float
+
+    attribute_score: float = 0.0
+
+    rating_score: float = 0.0
+
+    price_score: float = 0.0
+
+    final_score: float = 0.0

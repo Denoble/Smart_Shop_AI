@@ -195,34 +195,7 @@ def parse_query(query: str) -> SearchIntent:
     )
 
 
-from query_parser import parse_query
 
 
-queries = [
-    """
-    Find me a Dell laptop under $1500
-    with at least 16GB RAM
-    """,
-
-    """
-    I need a Lenovo laptop below $1200
-    with at least 4 stars
-    """,
-
-    """
-    Find me an Apple laptop over $1000
-    """,
-]
 
 
-for query in queries:
-
-    print("=" * 60)
-
-    print("QUERY:")
-    print(query.strip())
-
-    result = parse_query(query)
-
-    print("\nPARSED:")
-    print(result.model_dump())

@@ -9,8 +9,10 @@ from pgvector.psycopg import register_vector
 
 dir_path1 = Path("./database")
 dir_path = Path("./models")
+dir_path2 = Path("./agents")
 sys.path.append(str(dir_path))
 sys.path.append(str(dir_path1))
+sys.path.append(str(dir_path2)) 
 from pydantic_models import *
 from embedding_query import *
 from embedding_model import *
@@ -19,57 +21,7 @@ from pydantic_models import ProductFilters
 
 filters =  ProductFilters(max_price=1000.0)
 
-def semantic_search(
-    connection: Connection,
-    model: EmbeddingModel,
-    query: str,
-    limit: int = 50
-):
-    connection = embedding_query.get_db_connection()
-    query_embedding = model.embed(query)
 
-    with connection.cursor() as cursor:
-        try:
-            cursor.execute(
-                                """
-                                SELECT
-                                    p.product_id,
-                                    p.name,
-                                    p.brand,
-                                    p.category,
-                                    p.price,
-                                    p.rating,
-            
-                                    1 - (
-                                        pe.embedding <=> %s::vector
-                                    ) AS semantic_score
-            
-                                FROM product_embeddings pe
-            
-                                JOIN products p
-                                    ON p.product_id = pe.product_id
-            
-                                ORDER BY
-                                    pe.embedding <=> %s::vector
-            
-                                LIMIT %s
-                                """,
-                                (
-                                    query_embedding,
-                                    query_embedding,
-                                    limit
-                                )
-                            )
-            
-            return cursor.fetchall()
-                
-        except Exception as e:
-            print(f" Query Error: {e.with_traceback}")
-            conn.rollback()
-        finally:
-            # Close the cursor and connection
-            cursor.close()
-            conn.close()
             
 def build_product_filters(
     filters: ProductFilters = filters
@@ -116,85 +68,7 @@ def build_product_filters(
 
     return conditions, params
 
-def hybrid_search(
-    connection: Connection,
-    model: EmbeddingModel,
-    request: SearchRequest,
-) -> list[ProductResult]:
 
-    query_embedding = model.embed(
-        request.query
-    )
-    connection = embedding_query.get_db_connection()
-    conditions, filter_params = (
-        build_product_filters(
-            request.filters
-        )
-    )
-
-    where_clause = ""
-
-    if conditions:
-        where_clause = (
-            "WHERE " +
-            " AND ".join(conditions)
-        )
-
-    sql = f"""
-        SELECT
-            p.product_id,
-            p.name,
-            p.brand,
-            p.category,
-            p.price,
-            p.rating,
-
-            1 - (
-                pe.embedding <=> %s::vector
-            ) AS semantic_score
-
-        FROM product_embeddings pe
-
-        JOIN products p
-            ON p.product_id = pe.product_id
-
-        {where_clause}
-
-        ORDER BY
-            pe.embedding <=> %s::vector
-
-        LIMIT %s
-    """
-
-    params = [
-        query_embedding,
-        *filter_params,
-        query_embedding,
-        request.limit
-    ]
-
-    with connection.cursor() as cursor:
-
-        cursor.execute(
-            sql,
-            params
-        )
-
-        rows = cursor.fetchall()
-
-    return [
-        ProductResult(
-            product_id=row[0],
-            name=row[1],
-            brand=row[2],
-            category=row[3],
-            price=float(row[4]),
-            rating=float(row[5]),
-            semantic_score=float(row[6])
-        )
-        for row in rows
-    ]
-    
 def search_products(
     connection: Connection =conn,
     model: EmbeddingModel = EmbeddingModel(),
@@ -302,26 +176,27 @@ def calculate_score(
     )
 
 
-
-
 def build_filters(
     intent: SearchIntent
-) -> tuple[list[str], list]:
+):
 
     conditions = []
     params = []
 
     if intent.brands:
-        conditions.append(
-        "(" +
-        " OR ".join(
-            ["LOWER(p.brand) = LOWER(%s)"]
-            * len(intent.brands)
-        ) +
-        ")"
-    )
 
-    params.extend(intent.brands)
+        conditions.append(
+            "(" +
+            " OR ".join(
+                [
+                    "LOWER(p.brand) = LOWER(%s)"
+                    for _ in intent.brands
+                ]
+            ) +
+            ")"
+        )
+
+        params.extend(intent.brands)
 
     if intent.category:
 
@@ -372,8 +247,11 @@ def build_filters(
         params.append(
             intent.min_rating
         )
-        
-    for attribute, value in intent.attributes.items():
+
+    # HARD attribute constraints
+    for attribute in (
+        intent.required_attributes
+    ):
 
         conditions.append(
             """
@@ -381,19 +259,20 @@ def build_filters(
                 SELECT 1
                 FROM product_attributes pa
                 WHERE pa.product_id = p.product_id
-                AND LOWER(pa.attribute) = LOWER(%s)
-                AND LOWER(pa.value) LIKE LOWER(%s)
+                AND LOWER(pa.attribute)
+                    = LOWER(%s)
+                AND LOWER(pa.value)
+                    LIKE LOWER(%s)
             )
             """
         )
 
-    params.extend([
-        attribute,
-        f"%{value}%"
-    ])
+        params.extend([
+            attribute.name,
+            f"%{attribute.value}%"
+        ])
 
     return conditions, params
-
 
 def hybrid_search(
     connection: Connection,
@@ -575,57 +454,85 @@ def search(
     return intent, ranked[:limit]
 
 
+def validate_search_intent(
+    intent: SearchIntent
+) -> SearchIntent:
+
+    if intent.min_price is not None:
+        if intent.min_price < 0:
+            raise ValueError(
+                "Minimum price cannot be negative"
+            )
+
+    if intent.max_price is not None:
+        if intent.max_price < 0:
+            raise ValueError(
+                "Maximum price cannot be negative"
+            )
+
+    if (
+        intent.min_price is not None
+        and intent.max_price is not None
+        and intent.min_price > intent.max_price
+    ):
+        raise ValueError(
+            "Minimum price cannot exceed maximum price"
+        )
+
+    if intent.min_rating is not None:
+
+        if not 1 <= intent.min_rating <= 5:
+            raise ValueError(
+                "Rating must be between 1 and 5"
+            )
+
+    return intent
 
 
 
-def main():
+class SmartShopRetriever:
 
-    query = """
-    I'm looking for a Lenovo or Dell laptop
-    under $1200 with at least 16GB RAM
-    and excellent battery life.
-    """
+    def __init__(
+        self,
+        connection: Connection,
+        embedding_model: EmbeddingModel,
+        query_agent: QueryUnderstandingAgent
+    ):
 
-    model = EmbeddingModel()
+        self.connection = connection
+        self.embedding_model = embedding_model
+        self.query_agent = query_agent
 
-    with get_db_connection() as connection:
+    def search(
+        self,
+        query: str,
+        limit: int = 10
+    ):
 
-        intent, results = search(
-            connection,
-            model,
+        # 1. Natural language → structured intent
+        intent = self.query_agent.understand(
             query
         )
 
-        print("\nQUERY")
-        print("=" * 60)
-        print(query.strip())
-
-        print("\nSEARCH INTENT")
-        print("=" * 60)
-        print(
-            intent.model_dump_json(
-                indent=2
-            )
+        # 2. Validate LLM output
+        intent = validate_search_intent(
+            intent
         )
 
-        print("\nRESULTS")
-        print("=" * 60)
+        # 3. Hybrid retrieval
+        candidates = hybrid_search(
+            self.connection,
+            self.embedding_model,
+            intent,
+            candidate_limit=50
+        )
 
-        for result in results:
+        # 4. Re-rank
+        ranked = rerank(
+            candidates,
+            intent
+        )
 
-            print(
-                f"""
-{result.name}
-Brand: {result.brand}
-Price: ${result.price:.2f}
-Rating: {result.rating}
-Semantic: {result.semantic_score:.4f}
-Rating Score: {result.rating_score:.4f}
-Price Score: {result.price_score:.4f}
-Final Score: {result.final_score:.4f}
-"""
-            )
+        # 5. Return Top-K
+        return intent, ranked[:limit]
 
-
-if __name__ == "__main__":
-    main()

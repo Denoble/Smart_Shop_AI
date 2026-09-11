@@ -8,9 +8,13 @@ import psycopg
 from pgvector.psycopg import register_vector
 
 
-dir_path = Path("./models")
-sys.path.append(str(dir_path))
+model_directory = Path("./models")
+sys.path.append(str(model_directory))
+agents_directory = Path("./agents")
+sys.path.append(str(agents_directory))
+
 from pydantic_models import *
+from price_comparison_agent import PriceComparisonAgent
 
 # Establish a connection to the PostgreSQL database
 conn = psycopg.connect(
@@ -307,3 +311,105 @@ def  insert_review(review:Review):
         cursor.close()
         conn.close()
     
+
+
+
+def get_product_reviews(
+    product_id: str,
+    limit: int = 50
+):
+    connection = get_db_connection()
+    with connection.cursor() as cursor:
+
+        cursor.execute(
+            """
+            SELECT review_text
+            FROM reviews
+            WHERE product_id = %s
+            ORDER BY review_date DESC NULLS LAST
+            LIMIT %s
+            """,
+            (product_id, limit)
+        )
+
+        return [
+            row[0]
+            for row in cursor.fetchall()
+        ]  
+
+
+
+def save_insight(
+    self,
+    product_id: str,
+    review_count: int,
+    insight: dict
+):
+
+    with self.connection.cursor() as cursor:
+
+        cursor.execute(
+            """
+            INSERT INTO product_review_insights (
+                product_id,
+                review_count,
+                pros,
+                cons,
+                aspects,
+                updated_at
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (product_id)
+            DO UPDATE SET
+                review_count = EXCLUDED.review_count,
+                pros = EXCLUDED.pros,
+                cons = EXCLUDED.cons,
+                aspects = EXCLUDED.aspects,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                product_id,
+                review_count,
+                insight["pros"],
+                insight["cons"],
+                insight["aspects"]
+            )
+        )
+
+    self.connection.commit()
+
+
+def enrich_with_prices(
+    connection,
+    products
+):
+
+    agent = PriceComparisonAgent()
+
+    for product in products:
+
+        comparison = agent.compare(
+            connection,
+            product.product_id
+        )
+
+        if comparison.best_price is None:
+            continue
+
+        best = next(
+            price
+            for price in comparison.prices
+            if price.store_id == comparison.best_store_id
+        )
+
+        product.best_store = best.store_name
+        product.best_total_price = best.total_cost
+
+    return products

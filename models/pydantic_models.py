@@ -152,24 +152,85 @@ class SearchIntent(BaseModel):
 
 
 class ProductResult(BaseModel):
-    product_id: int
-
+    product_id: str
     name: str
-
     brand: str
-
     category: str
-
     price: float
-
     rating: float
 
     semantic_score: float
 
     attribute_score: float = 0.0
-
     rating_score: float = 0.0
-
     price_score: float = 0.0
+    brand_score: float = 0.0
+
+    review_sentiment_score: float = 0.0
+    review_confidence: float = 0.0
 
     final_score: float = 0.0
+
+
+
+
+
+
+class AspectInsight(BaseModel):
+    sentiment: float = 0.0
+    mentions: int = 0
+
+
+class ReviewInsight(BaseModel):
+    product_id: int
+
+    review_count: int = 0
+
+    positive_ratio: float = 0.0
+    negative_ratio: float = 0.0
+    neutral_ratio: float = 0.0
+
+    sentiment_score: float = 0.0
+    confidence: float = 0.0
+
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+
+    aspects: dict[str, AspectInsight] = Field(
+        default_factory=dict
+    )
+
+
+class Aspect(BaseModel):
+    name: str
+    sentiment: float = Field(
+        ge=-1.0,
+        le=1.0
+    )
+
+
+class ReviewAnalysis(BaseModel):
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+    aspects: list[Aspect] = Field(default_factory=list)
+
+class StorePrice(BaseModel):
+    store_id: int
+    store_name: str
+
+    price: float
+    discount: float = 0.0
+    shipping_cost: float = 0.0
+
+    total_cost: float
+    savings: float = 0.0
+
+    available: bool = True
+
+
+class PriceComparison(BaseModel):
+    product_id: int
+    prices: list[StorePrice]
+
+    best_store_id: int | None = None
+    best_price: float | None = None

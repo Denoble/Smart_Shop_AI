@@ -1,10 +1,10 @@
 import sys
 from pathlib import Path
 
-dir_path = Path("./models")
-dir_path1 = Path("./database")
-sys.path.append(str(dir_path1))
-sys.path.append(str(dir_path))
+model_directory = Path("./models")
+database_directory = Path("./database")
+sys.path.append(str(database_directory))
+sys.path.append(str(model_directory))
 from pydantic_models import *
 from embedding_model import *
 from embedding_query import *

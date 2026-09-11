@@ -372,27 +372,19 @@ def calculate_price_score(
     )
 
 
-def calculate_rating_score(
-    rating: float
-) -> float:
-
-    return min(
-        rating / 5.0,
-        1.0
+def calculate_review_score(product):
+    return max(
+        0.0,
+        min(product.review_sentiment_score, 1.0)
     )
 
 
-def rerank(
-    products: list[ProductResult],
-    intent: SearchIntent
-) -> list[ProductResult]:
+def rerank(products, intent):
 
     for product in products:
 
         product.rating_score = (
-            calculate_rating_score(
-                product.rating
-            )
+            calculate_rating_score(product.rating)
         )
 
         product.price_score = (
@@ -402,29 +394,30 @@ def rerank(
             )
         )
 
-        product.attribute_score = (
-            1.0
-            if intent.attributes
-            else 0.5
+        product.brand_score = (
+            calculate_brand_score(
+                product.brand,
+                intent
+            )
         )
 
+        review_score = calculate_review_score(product)
+
+        product.attribute_score = 0.5
+
         product.final_score = (
-            0.60 * product.semantic_score
-            +
-            0.20 * product.rating_score
-            +
-            0.15 * product.price_score
-            +
-            0.05 * product.attribute_score
+            0.45 * product.semantic_score
+            + 0.15 * product.rating_score
+            + 0.15 * product.price_score
+            + 0.10 * product.brand_score
+            + 0.15 * review_score
         )
 
     return sorted(
         products,
-        key=lambda x: x.final_score,
+        key=lambda product: product.final_score,
         reverse=True
     )
-
-
 
 def search(
     connection: Connection,

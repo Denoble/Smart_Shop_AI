@@ -1,20 +1,26 @@
 import sys
 from pathlib import Path
-dir_path = Path("./models")
-dir_path1 = Path("./database")
-dir_path2 = Path("./agents")
-dir_path3 = Path("./search")
-sys.path.append(str(dir_path1))
-sys.path.append(str(dir_path))
-sys.path.append(str(dir_path2))
-sys.path.append(str(dir_path3))
+from unittest import result
 
+
+model_directory = Path("./models")
+database_directory = Path("./database")
+agents_directory = Path("./agents")
+search_directory = Path("./search")
+sys.path.append(str(database_directory))
+sys.path.append(str(model_directory))
+sys.path.append(str(agents_directory))
+sys.path.append(str(search_directory))
+
+
+from recommendation_agent import RecommendationAgent
 from query_parser import parse_query
 from pydantic_models import Product, Review
 from embedding_model import *
 from embedding_query import *
 from understanding_agent import *
 from semantic_search import *
+from shopping_agent import ShoppingAgent
 
 
 query_agent = (
@@ -105,7 +111,31 @@ def test_query_parser():
 
 
 
+def test_recommendation_agent(retriever: SmartShopRetriever,
+                            db_connection:Connection, embedding_model: EmbeddingModel,
+                        query_agent: QueryUnderstandingAgent):
+            shopping_agent = ShoppingAgent(retriever, db_connection)
+            result = shopping_agent.recommend(
+            """
+            Find me a laptop for software development
+            under $1200 with at least 16GB RAM
+            and excellent battery life.
+            """,
+            user_preferences={
+                "preferred_brands": ["Lenovo", "Dell"]
+            }
+        )
+            print(result)
+            for recommendation in (
+                result["recommendations"].recommendations
+            ):
+                print(
+                    recommendation.product_id,
+                    recommendation.score,
+                    recommendation.reason
+                )
 
+                
 
 def main():
 
@@ -119,7 +149,14 @@ def main():
     """
 
     intent = agent.understand(query)
-
+    db_connection = get_db_connection()
+    embedding_model = EmbeddingModel()
+    retriever = SmartShopRetriever(
+        db_connection,
+        embedding_model=embedding_model,
+        query_agent=agent
+    )
+    test_recommendation_agent(retriever, db_connection, embedding_model, agent)
     print("\nUSER QUERY")
     print("=" * 60)
     print(query.strip())
@@ -137,4 +174,18 @@ def main():
 if __name__ == "__main__":
     #main()
     #test_query_parser()
-    test_smartshop_pipeline()
+    #test_smartshop_pipeline()
+    db_connection = get_db_connection()
+    embedding_model = EmbeddingModel()
+    query_agent = QueryUnderstandingAgent()
+    retriever = SmartShopRetriever(
+        db_connection,
+        embedding_model=embedding_model,
+        query_agent=query_agent
+    )
+    test_recommendation_agent(
+        retriever,
+        db_connection,
+        embedding_model,
+        query_agent
+    )

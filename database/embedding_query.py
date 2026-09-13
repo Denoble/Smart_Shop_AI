@@ -413,3 +413,71 @@ def enrich_with_prices(
         product.best_total_price = best.total_cost
 
     return products
+
+
+def save_insight(
+    self,
+    product_id: str,
+    review_count: int,
+    positive_ratio: float,
+    negative_ratio: float,
+    neutral_ratio: float,
+    sentiment_score: float,
+    confidence: float,
+    insight: dict
+):
+
+    from psycopg.types.json import Jsonb
+
+    with self.connection.cursor() as cursor:
+
+        cursor.execute(
+            """
+            INSERT INTO product_review_insights (
+                product_id,
+                review_count,
+                positive_ratio,
+                negative_ratio,
+                neutral_ratio,
+                sentiment_score,
+                confidence,
+                pros,
+                cons,
+                aspects,
+                updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                CURRENT_TIMESTAMP
+            )
+
+            ON CONFLICT (product_id)
+            DO UPDATE SET
+                review_count = EXCLUDED.review_count,
+                positive_ratio = EXCLUDED.positive_ratio,
+                negative_ratio = EXCLUDED.negative_ratio,
+                neutral_ratio = EXCLUDED.neutral_ratio,
+                sentiment_score = EXCLUDED.sentiment_score,
+                confidence = EXCLUDED.confidence,
+                pros = EXCLUDED.pros,
+                cons = EXCLUDED.cons,
+                aspects = EXCLUDED.aspects,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                product_id,
+                review_count,
+                positive_ratio,
+                negative_ratio,
+                neutral_ratio,
+                sentiment_score,
+                confidence,
+                Jsonb(insight["pros"]),
+                Jsonb(insight["cons"]),
+                Jsonb(insight["aspects"])
+            )
+        )
+
+    self.connection.commit()
+

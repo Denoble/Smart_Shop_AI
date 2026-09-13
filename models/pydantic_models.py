@@ -93,61 +93,40 @@ class Attribute(BaseModel):
 
 class SearchIntent(BaseModel):
     """
-    Structured representation of a user's shopping request.
+    Structured representation of the user's shopping request.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     semantic_query: str = Field(
         description=(
-            "The semantic portion of the request used for "
-            "vector search."
+            "The semantic portion of the request that should "
+            "be used for vector search."
         )
     )
 
     brands: list[str] = Field(
-        description="Brands explicitly required by the user."
+        default_factory=list
     )
 
-    category: Optional[str] = Field(
-        description="Primary product category, or null."
+    category: Optional[str] = None
+
+    subcategory: Optional[str] = None
+
+    min_price: Optional[float] = None
+
+    max_price: Optional[float] = None
+
+    min_rating: Optional[float] = None
+
+    required_attributes: dict[str, str] = Field(
+        default_factory=dict
     )
 
-    subcategory: Optional[str] = Field(
-        description="Product subcategory, or null."
-    )
-
-    min_price: Optional[float] = Field(
-        description="Minimum acceptable price, or null."
-    )
-
-    max_price: Optional[float] = Field(
-        description="Maximum acceptable price, or null."
-    )
-
-    min_rating: Optional[float] = Field(
-        description="Minimum acceptable rating, or null."
-    )
-
-    required_attributes: list[Attribute] = Field(
-        description=(
-            "Hard product requirements. "
-            "Return an empty list if there are none."
-        )
-    )
-
-    preferred_attributes: list[Attribute] = Field(
-        description=(
-            "Soft product preferences. "
-            "Return an empty list if there are none."
-        )
+    preferred_attributes: dict[str, str] = Field(
+        default_factory=dict
     )
 
     preferred_brands: list[str] = Field(
-        description=(
-            "Brands the user prefers but does not require. "
-            "Return an empty list if there are none."
-        )
+        default_factory=list
     )
 
 
@@ -169,10 +148,13 @@ class ProductResult(BaseModel):
     review_sentiment_score: float = 0.0
     review_confidence: float = 0.0
 
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+
+    best_store: str | None = None
+    best_total_price: float | None = None
+
     final_score: float = 0.0
-
-
-
 
 
 

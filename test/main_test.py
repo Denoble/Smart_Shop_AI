@@ -1,6 +1,11 @@
+import math
+from multiprocessing import connection
 import sys
+import unittest
 from pathlib import Path
-from unittest import result
+import pytest
+
+
 
 
 model_directory = Path("./models")
@@ -31,7 +36,7 @@ embedding_model = (
         EmbeddingModel()
     )
 
-def test_smartshop_pipeline():
+def test_smartshop_retriever_pipeline():
     query = """
     I'm looking for a laptop for software development
     under $1,200. I prefer Lenovo or Dell,
@@ -137,8 +142,8 @@ def test_recommendation_agent(retriever: SmartShopRetriever,
 
                 
 
-def main():
-
+def test_query_understandingAgent():
+    
     agent = QueryUnderstandingAgent()
 
     query = """
@@ -149,14 +154,7 @@ def main():
     """
 
     intent = agent.understand(query)
-    db_connection = get_db_connection()
-    embedding_model = EmbeddingModel()
-    retriever = SmartShopRetriever(
-        db_connection,
-        embedding_model=embedding_model,
-        query_agent=agent
-    )
-    test_recommendation_agent(retriever, db_connection, embedding_model, agent)
+
     print("\nUSER QUERY")
     print("=" * 60)
     print(query.strip())
@@ -171,6 +169,261 @@ def main():
     )
 
 
+ 
+
+
+def test_recommendation_agent():
+    agent = RecommendationAgent()
+    products=[
+                ProductResult(
+                    product_id="LP0001",
+                    name="Test Laptop 1",
+                    brand="Dell",
+                    category="Laptop",
+                    price=1000,
+                    rating=4.5, 
+                    semantic_score=0.9,
+                    review_sentiment_score=0.9,
+                    review_confidence=0.8
+                )
+            ]
+    user_preferences = {
+        "preferred_brands": ["Dell"]
+    }
+    recommendations = agent.recommend(
+        products,
+        user_preferences=user_preferences,
+        limit=5
+    )
+    print(f"Recommendations: {recommendations.recommendations}")
+    
+
+# tests/test_pricing.py
+
+def test_total_cost():
+
+    price = 1000
+    discount = 100
+    shipping = 25
+
+    total = (
+        price
+        - discount
+        + shipping
+    )
+
+    assert total == 925
+def test_review_confidence():
+
+    review_count = 25
+
+    confidence = min(
+        review_count / 100.0,
+        1.0
+    )
+
+    assert confidence == 0.25
+
+def test_sentiment_normalization():
+
+    assert normalize_sentiment(-1.0) == 0.0
+    assert normalize_sentiment(0.0) == 0.5
+    assert normalize_sentiment(1.0) == 1.0 
+    
+def test_review_score():
+
+    product = ProductResult(
+        product_id="LP0003",
+        name="Test Laptop",
+        brand="Dell",
+        category="Laptop",
+        price=1000,
+        rating=4.5,
+        semantic_score=0.9,
+        review_sentiment_score=0.9,
+        review_confidence=0.8
+    )
+
+    score = calculate_review_score(product)
+    print(f"Review score for {product.name}: {score:.2f}")
+    expected_score = 0.72
+    assert score == pytest.approx(expected_score, rel=1e-2), f"Expected score to be approximately {expected_score}, but got {score:.2f}"
+   
+def test_shopping_agent_recommendation():
+    db_connection = get_db_connection()
+    embedding_model = EmbeddingModel()
+    query_agent = QueryUnderstandingAgent()
+    retriever = SmartShopRetriever(
+        db_connection,
+        embedding_model=embedding_model,
+        query_agent=query_agent
+    )
+    shopping_agent = ShoppingAgent(
+        retriever,
+        db_connection   
+    )
+    result = shopping_agent.recommend(
+        """
+        Find me a laptop for software development
+        under $1200 with at least 16GB RAM
+        and excellent battery life.
+        """,
+        user_preferences={
+            "preferred_brands": ["Lenovo", "Dell"]
+        }
+    )
+
+    print(f"Shopping Agent Recommendations: {result['recommendations'].recommendations}") 
+def test_build_filters():
+    intent = SearchIntent(
+    semantic_query="laptop for software development",
+    max_price=1200,
+    min_rating=4.0,
+    required_attributes={
+        "RAM": "16GB",
+        "Storage": "512GB"
+    },
+    preferred_brands=["Dell", "Lenovo"]
+)
+
+    conditions, params = build_filters(intent)
+
+    print("CONDITIONS:")
+    for condition in conditions:
+        print(condition)
+
+    print("\nPARAMETERS:")
+    print(params)
+    
+    
+def test_hybrid_search(connection, embedding_model):
+
+    intent = SearchIntent(
+        semantic_query="laptop for software development",
+        max_price=1200,
+        required_attributes={
+            "RAM": "16GB",
+            "Storage": "512GB"
+        }
+    )
+
+    results = hybrid_search(
+        connection=connection,
+        model=embedding_model,
+        intent=intent,
+        candidate_limit=10
+    )
+
+    print("\nRESULTS")
+    print("=" * 60)
+
+    assert isinstance(results, list)
+
+    for product in results:
+
+        print(
+            f"{product.product_id} | "
+            f"{product.name} | "
+            f"{product.brand} | "
+            f"${product.price:.2f} | "
+            f"rating={product.rating} | "
+            f"semantic={product.semantic_score:.4f}"
+        )
+
+        assert isinstance(product.product_id, str)
+        assert isinstance(product.name, str)
+        assert isinstance(product.semantic_score, float)
+        
+def test_hybrid_search_hard_filters(connection, embedding_model):
+    intent = SearchIntent(
+    semantic_query="laptop for software development",
+    max_price=1200,
+    min_rating=4.0,
+    required_attributes={
+        "RAM": "16GB",
+        "Storage": "512GB"
+    }
+)
+
+    results = hybrid_search(
+        connection,
+        embedding_model,
+        intent,
+        candidate_limit=10
+    )
+
+    for product in results:
+        print(
+            product.product_id,
+            product.name,
+            product.brand,
+            product.price,
+            product.rating,
+            product.semantic_score
+        )
+
+    assert all(product.price <= 1200 for product in results)
+    assert all(product.rating >= 4.0 for product in results)
+        
+def test_hybrid_search_without_filters(connection, embedding_model):
+    intent = SearchIntent(
+        semantic_query="laptop for programming")
+
+    results = hybrid_search(
+                connection,
+                embedding_model,
+                intent,
+                candidate_limit=5
+            )
+
+    for product in results:
+        print(
+            product.product_id,
+            product.name,
+            product.semantic_score
+        )
+    
+def test_end_to_end(shopping_agent):
+    query =  """
+            Find me a laptop for software development
+            under $1200 with at least 16GB RAM
+            and excellent battery life.
+            """,
+    product = ProductResult(
+                product_id="LP0003",
+                name="Test Laptop",
+                brand="Dell",
+                category="Laptop",
+                price=1000,
+                rating=4.5,
+                semantic_score=0.9,
+                review_sentiment_score=0.9,
+                review_confidence=0.8
+            )
+    user_preferences={
+                "preferred_brands": [
+                    "Lenovo",
+                    "Dell"
+                ]
+            }
+    result = shopping_agent.recommend( query, user_preferences=user_preferences)
+    
+
+    assert result["intent"] is not None
+    print(f"Intent: {result['intent']}")
+    recommendations = (
+        result["recommendations"]
+        .recommendations
+    )
+    print(f"Recommendations length: {len(recommendations)}")
+    assert len(recommendations) > 0
+
+    for recommendation in recommendations:
+
+        assert recommendation.product_id > 0
+        assert 0 <= recommendation.score <= 1
+        assert recommendation.reason
+    
 if __name__ == "__main__":
     #main()
     #test_query_parser()
@@ -183,9 +436,21 @@ if __name__ == "__main__":
         embedding_model=embedding_model,
         query_agent=query_agent
     )
-    test_recommendation_agent(
+    #test_build_filters()
+    #test_hybrid_search(db_connection, embedding_model)
+    test_hybrid_search_hard_filters(db_connection, embedding_model)
+    #test_hybrid_search_without_filters(db_connection, embedding_model)
+    
+    #test_smartshop_retriever_pipeline()
+    #test_recommendation_agent()
+    """shopping_agent = ShoppingAgent(
         retriever,
-        db_connection,
-        embedding_model,
-        query_agent
+        db_connection   
     )
+    #test_recommendation_agent()
+    #test_query_understandingAgent()
+    test_shopping_agent_recommendation()
+    test_end_to_end(ShoppingAgent(
+       retriever,
+        db_connection
+    ))"""

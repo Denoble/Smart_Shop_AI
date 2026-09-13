@@ -113,7 +113,7 @@ def search_products(
     
 def semantic_search(
     connection: Connection,
-    model: embedding_query.EmbeddingModel,
+    model: EmbeddingModel,
     query: str ,
     limit: int = 50
 ):
@@ -249,8 +249,8 @@ def build_filters(
         )
 
     # HARD attribute constraints
-    for attribute in (
-        intent.required_attributes
+    for attribute, value in (
+        intent.required_attributes.items()
     ):
 
         conditions.append(
@@ -260,7 +260,7 @@ def build_filters(
                 FROM product_attributes pa
                 WHERE pa.product_id = p.product_id
                 AND LOWER(pa.attribute)
-                    = LOWER(%s)
+                = LOWER(%s)
                 AND LOWER(pa.value)
                     LIKE LOWER(%s)
             )
@@ -268,11 +268,12 @@ def build_filters(
         )
 
         params.extend([
-            attribute.name,
-            f"%{attribute.value}%"
+            attribute,
+            f"%{value}%"
         ])
 
     return conditions, params
+
 
 def hybrid_search(
     connection: Connection,
@@ -284,11 +285,10 @@ def hybrid_search(
     query_embedding = model.embed(
         intent.semantic_query
     )
-
+    
     conditions, filter_params = (
         build_filters(intent)
     )
-
     where_clause = ""
 
     if conditions:
@@ -323,36 +323,41 @@ def hybrid_search(
 
         LIMIT %s
     """
-
+    print("=="* 20)
+    print("SQL Query for Hybrid Search")
+    print(sql)
+    print("=="* 20)
     params = [
         query_embedding,
         *filter_params,
         query_embedding,
         candidate_limit
     ]
+    try:
+            with connection.cursor() as cursor:
 
-    with connection.cursor() as cursor:
+                cursor.execute(
+                    sql,
+                    params
+                )
 
-        cursor.execute(
-            sql,
-            params
-        )
+                rows = cursor.fetchall()
 
-        rows = cursor.fetchall()
-
-    return [
-        ProductResult(
-            product_id=row[0],
-            name=row[1],
-            brand=row[2],
-            category=row[3],
-            price=float(row[4]),
-            rating=float(row[5]),
-            semantic_score=float(row[6]),
-        )
-        for row in rows
-    ]
-
+            return [
+                ProductResult(
+                    product_id=row[0],
+                    name=row[1],
+                    brand=row[2],
+                    category=row[3],
+                    price=float(row[4]),
+                    rating=float(row[5]),
+                    semantic_score=float(row[6]),
+                )
+                for row in rows
+            ]
+    except Exception as e:
+        print(f"Error during hybrid search: {e}")
+        raise
 
 
 
@@ -371,11 +376,31 @@ def calculate_price_score(
         price / intent.max_price
     )
 
+def normalize_sentiment(score: float) -> float:
+    return (score + 1.0) / 2.0
 
-def calculate_review_score(product):
+def calculate_deal_score(product):
+
+    if product.best_total_price is None:
+        return 0.5
+
+    if product.price <= 0:
+        return 0.5
+
+    savings_ratio = (
+        product.price - product.best_total_price
+    ) / product.price
+
     return max(
         0.0,
-        min(product.review_sentiment_score, 1.0)
+        min(1.0, savings_ratio + 0.5)
+    )
+
+def calculate_review_score(product):
+
+    return (
+        product.review_sentiment_score
+        * product.review_confidence
     )
 
 
@@ -403,15 +428,14 @@ def rerank(products, intent):
 
         review_score = calculate_review_score(product)
 
-        product.attribute_score = 0.5
-
         product.final_score = (
-            0.45 * product.semantic_score
-            + 0.15 * product.rating_score
-            + 0.15 * product.price_score
-            + 0.10 * product.brand_score
-            + 0.15 * review_score
-        )
+        0.40 * product.semantic_score
+        + 0.15 * product.rating_score
+        + 0.10 * product.price_score
+        + 0.10 * product.brand_score
+        + 0.15 * calculate_review_score(product)
+        + 0.10 * calculate_deal_score(product) 
+    )
 
     return sorted(
         products,
@@ -428,7 +452,9 @@ def search(
 
     # 1. Understand the user's query
     intent = parse_query(query)
-
+    print("Printing SearchIntent")
+    print("=="* 20)
+    print(f"SearchIntent: {intent}")
     # 2. Retrieve candidates
     candidates = hybrid_search(
         connection,
@@ -436,6 +462,10 @@ def search(
         intent,
         candidate_limit=50
     )
+    print("Printing Candidates")
+    print("=="* 20)
+    for candidate in candidates:
+        print(f"Candidate: {candidate}")
 
     # 3. Re-rank candidates
     ranked = rerank(
@@ -501,31 +531,11 @@ class SmartShopRetriever:
         query: str,
         limit: int = 10
     ):
-
-        # 1. Natural language → structured intent
-        intent = self.query_agent.understand(
-            query
-        )
-
-        # 2. Validate LLM output
-        intent = validate_search_intent(
-            intent
-        )
-
-        # 3. Hybrid retrieval
-        candidates = hybrid_search(
+        search_intent, candidates = search(
             self.connection,
             self.embedding_model,
-            intent,
-            candidate_limit=50
+            query,
+            limit=limit
         )
-
-        # 4. Re-rank
-        ranked = rerank(
-            candidates,
-            intent
-        )
-
-        # 5. Return Top-K
-        return intent, ranked[:limit]
+        return search_intent, candidates
 

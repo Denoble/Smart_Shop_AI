@@ -8,7 +8,7 @@ from pgvector.psycopg import register_vector
 from smartShopAi.models.pydantic_models import Product, Review, Policy, Currency
 from smartShopAi.agents import *
 from  smartShopAi import csvs
-
+from smartShopAi.agents.price_comparison_agent import PriceComparisonAgent
 # Establish a connection to the PostgreSQL database
 conn = psycopg.connect(
             dbname="smartshop",

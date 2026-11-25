@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-from smartShopAi.models. pydantic_models import Product, Review
+from smartShopAi.models. pydantic_models import Product, Review, ProductResult
 from smartShopAi.database.embedding_model import *
 from smartShopAi.database. embedding_query import *
 from smartShopAi.read_env_variables. read_env_variable_file import get_openai_api_key

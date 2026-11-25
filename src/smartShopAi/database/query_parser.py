@@ -36,6 +36,9 @@ KNOWN_CATEGORIES = {
 
 
 def extract_brands(query: str) -> list[str]:
+    print(f"Extracting brands from query: {query}")
+    if type(query) != str:
+        raise TypeError("Query must be a string")
     query_lower = query.lower()
 
     return [
@@ -48,7 +51,7 @@ def extract_brands(query: str) -> list[str]:
 def extract_price_range(
     query: str
 ) -> tuple[float | None, float | None]:
-
+    print(f"Extracting price range from query: {query}")
     query_lower = query.lower()
 
     max_price = None

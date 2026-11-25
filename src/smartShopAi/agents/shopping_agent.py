@@ -1,9 +1,10 @@
 
 
 from smartShopAi.search. semantic_search import SmartShopRetriever
-from smartShopAi.database.embedding_model import enrich_with_reviews,ReviewIntelligence
+from smartShopAi.database.embedding_model import enrich_with_reviews
 from smartShopAi.database.embedding_query import enrich_with_prices
 from smartShopAi.search.rerank import rerank
+from smartShopAi.agents.recommendation_agent import RecommendationAgent
 
 class ShoppingAgent:
 

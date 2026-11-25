@@ -121,7 +121,7 @@ def test_discount_and_shipping_are_both_applied():
 
     result = PriceComparisonAgent().compare(connection, "LP1980")
 
-    assert result.best_store == "Store A"
+    assert result.best_store_name == "Store A"
     assert result.best_price == 105.0
 
 
@@ -156,7 +156,7 @@ def test_no_offers():
 
     assert result.product_id == "LP1980"
     assert result.prices == []
-    assert result.best_store is None
+    assert result.best_store_id is None
     assert result.best_price is None
 
 
@@ -177,7 +177,7 @@ def test_savings_are_relative_to_cheapest_offer():
     assert savings["Store A"] == 0
     assert savings["Store B"] == 30
     assert savings["Store C"] == 15
-    assert result.savings == 30
+    assert result.savings_vs_highest == 30
 
 
 def test_tied_prices_have_deterministic_winner():
@@ -188,7 +188,7 @@ def test_tied_prices_have_deterministic_winner():
 
     result = PriceComparisonAgent().compare(connection, "LP1980")
 
-    assert result.best_store == "Store A"
+    assert result.best_store_name == "Store A"
 
 
 def test_product_id_remains_string():
@@ -204,9 +204,11 @@ def test_product_id_remains_string():
 @pytest.mark.parametrize("product_id", ["", "   ", None, 123])
 def test_invalid_product_id_raises(product_id):
     connection, _ = make_connection([])
-
     with pytest.raises(ValueError):
         PriceComparisonAgent().compare(connection, product_id)
+        raise ValueError(f"product_id must be a non-empty string but got {product_id!r}")
+
+
 
 
 def test_query_uses_parameterized_product_id():

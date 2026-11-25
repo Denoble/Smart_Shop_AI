@@ -380,7 +380,13 @@ def calculate_deal_score(product):
     )
 
 
+def calculate_review_score(product):
 
+    sentiment = normalize_sentiment(
+        product.review_sentiment_score
+    )
+
+    return sentiment * product.review_confidence
 
 
     
